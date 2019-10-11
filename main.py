@@ -39,7 +39,7 @@ GPIO.setup(btn4, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 ########################
 #THREADS
 ########################
-def monitor_thread(args):
+def monitor_thread():
     global frequency
     while (True):
         print("Thread boi updating")
@@ -62,6 +62,7 @@ def alarm_thread():
 ########################
 #FUNCTIONS
 ########################
+#Interrupt Routines
 def alarm_dismiss(channel):
     global alarm_flag
     alarm_flag = False
@@ -84,23 +85,37 @@ def stop(channel): #Toggle the monitoring of sensors
     #TODO -> Toggle monitoring
     pass
 
+#I2C Interfacing
+#RTC
 
+#SPI Interfacing
+#ADC
+
+#DAC
+
+########################
+#Setup Interrupts
+########################
 GPIO.add_event_detect(btn1, GPIO.FALLING, callback=alarm_dismiss, bouncetime=200)
 GPIO.add_event_detect(btn2, GPIO.FALLING, callback=reset, bouncetime=200)
 GPIO.add_event_detect(btn3, GPIO.FALLING, callback=frequency_toggle, bouncetime=200)
 GPIO.add_event_detect(btn4, GPIO.FALLING, callback=stop, bouncetime=200)
 
+########################
+#Startup Threads
+########################
+monitorThread = threading.Thread(target=monitor_thread)
+alarmThread = threading.Thread(target=alarm_thread)
+monitorThread.daemon = True
+alarmThread.daemon = True
+monitorThread.start()
+alarmThread.start()
 
 try:
     #Program Main
-    monitorThread = threading.Thread(target=monitor_thread, args=(1,))
-    alarmThread = threading.Thread(target=alarm_thread)
-    monitorThread.daemon = True
-    alarmThread.daemon = True
-    monitorThread.start()
-    alarmThread.start()
     while(True):
         print("Main looping")
         time.sleep(5)
 except KeyboardInterrupt:
     print("Interrupted!")
+    GPIO.cleanup()
