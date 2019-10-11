@@ -15,7 +15,8 @@ btn2 = 20
 btn3 = 16
 btn4 = 12
 frequency = 1 #Default freq for monitoring is 1Hz
-alarm_flag = False
+alarm_flag = False #Set when voltage boundry breached or recovers
+alarm_dismissed = False #Once alarm is triggered, only stop alarming when it is user dismissed
 dac_voltage = 0
 
 ########################
@@ -49,12 +50,14 @@ def monitor_thread():
 def alarm_thread():
     global pwm
     global alarm_flag
+    global alarm_dismissed
     last_trigger = 0
     alarm_flag = False
     while(True):
-        if (alarm_flag and (time.time()-last_trigger > 18)):
+        if (alarm_flag and (time.time()-last_trigger > 10)):
+            alarm_dismissed = False
             pwm.ChangeDutyCycle(100)
-            while(alarm_flag):
+            while(not alarm_dismissed):
                 pass
             last_trigger = time.time()
             pwm.ChangeDutyCycle(0)
@@ -64,12 +67,12 @@ def alarm_thread():
 ########################
 #Interrupt Routines
 def alarm_dismiss(channel):
-    global alarm_flag
-    alarm_flag = False
+    global alarm_dismissed
+    alarm_dismissed = True
 
 def reset(channel): #resets the system timer and cleans the console
     global alarm_flag #TESTING
-    alarm_flag = True #TESTING
+    alarm_flag = not alarm_flag #TESTING
 
 def frequency_toggle(channel): #Toggle between the 3 frequencies
     print("Frequency toggled!")
