@@ -71,8 +71,8 @@ dac_voltage = 0
 def monitor_thread():
     global frequency
     global running_flag
+    print("|RTC Time|Sys Timer|Humidity|Temp|Light|DAC out|Alarm")
     while (running_flag==True):
-        print("Thread boi updating")
         monitor_adc();
         time.sleep(1/frequency)
 
@@ -231,26 +231,37 @@ def adc_read(channel):
     spi.mode = 0b00    
     bytes = spi.xfer2([1,(8+channel)<<4,0]) #Read from ADC           
     spi.close()
-    value = ((bytes[1]&3)<<8)+bytes[2]                      
-    voltage = (analog_ref/(math.pow(2,analog_res)-1))*value
+    value = ((bytes[1]&3)<<8)+bytes[2]
+    if(channel!=2):
+        voltage = (analog_ref/(math.pow(2,analog_res)-1))*value
+    else:
+        voltage = value
     return voltage
 
 
 def monitor_adc():                              
     temp = adc_read(0) #read temp sensor
-    print(temp)
+    #print(temp)
     temp_degrees = (temp-v_degrees)/temp_coeff;
     time.sleep(0.1)
-    print(str(temp_degrees) + "v")
+    #print(str(temp_degrees) + "v")
     humidity = adc_read(1) #read potentiometer representing humidity
-    print(str(humidity) + "v")
+    #print(str(humidity) + "v")
     time.sleep(0.1)
     light = adc_read(2)
-    print(str(light) + "v")
+    #print(str(light) + "v")
     time.sleep(0.1)
 
     dac_voltage = (light/1023)*humidity
-    print(dac_voltage)
+    #print(dac_voltage)
+    dac_set(dac_voltage)
+    alarm = "*"
+    clock = "10:17:15"
+    sys = "00:00:00"
+    print_output(clock, sys, humidity, temp_degrees, light, dac_voltage, alarm)
+
+def print_output(clock, sys, humidity, temp_degrees, light, dac_voltage, alarm):
+    print(f"|{clock}|{sys}|{humidity:.1f} V|{temp_degrees:.0f} C|{light:.0f}|{dac_voltage: .2f}V|{alarm}|") 
 
 def dac_set(voltage):
     spi.open(0, 1) #Open connection on (bus 0, cs/device 1)                   
@@ -258,10 +269,6 @@ def dac_set(voltage):
     spi.mode = 0b00
     spi.xfer2([0b00111000,0])
     spi.close()
-
-#def get_dac_out():
-    #Vout = LightReading/1023 × HumidityVoltageReading   
-
     
 #Only run the functions if
 if __name__ == "__main__":
