@@ -38,31 +38,6 @@ GPIO.setup(btn4, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
 
 ########################
-#THREADS
-########################
-def monitor_thread():
-    global frequency
-    while (True):
-        print("Thread boi updating")
-
-        time.sleep(1/frequency)
-
-def alarm_thread():
-    global pwm
-    global alarm_flag
-    global alarm_dismissed
-    last_trigger = 0
-    alarm_flag = False
-    while(True):
-        if (alarm_flag and (time.time()-last_trigger > 10)):
-            alarm_dismissed = False
-            pwm.ChangeDutyCycle(100)
-            while(not alarm_dismissed):
-                pass
-            last_trigger = time.time()
-            pwm.ChangeDutyCycle(0)
-
-########################
 #FUNCTIONS
 ########################
 #Interrupt Routines
@@ -91,10 +66,39 @@ def stop(channel): #Toggle the monitoring of sensors
 #I2C Interfacing
 #RTC
 
+
 #SPI Interfacing
 #ADC
 
 #DAC
+
+########################
+#THREADS
+########################
+def monitor_thread():
+    global frequency
+    global alarm_flag
+    while (True):
+        print("Thread boi updating")
+
+
+
+        time.sleep(1/frequency)
+
+def alarm_thread():
+    global pwm
+    global alarm_flag
+    global alarm_dismissed
+    last_trigger = 0
+    alarm_flag = False
+    while(True):
+        if (alarm_flag and (time.time()-last_trigger > 10)):
+            alarm_dismissed = False
+            pwm.ChangeDutyCycle(100)
+            while(not alarm_dismissed):
+                pass
+            last_trigger = time.time()
+            pwm.ChangeDutyCycle(0)
 
 ########################
 #Setup Interrupts
