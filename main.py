@@ -90,7 +90,7 @@ def alarm_thread():
     global alarm_flag
     global alarm_dismissed
     last_trigger = 0
-    alarm_flag = False
+    alarm_flag = False #Gives a definite starting state, should be imediatly updated anyway by thread
     while(True):
         if (alarm_flag and (time.time()-last_trigger > 10)):
             alarm_dismissed = False
