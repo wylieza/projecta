@@ -26,6 +26,7 @@ import smbus
 import math
 import blynklib
 import random
+import datetime
 
 
 ###CONSTANTS###
@@ -82,6 +83,9 @@ light = 0
 temp = 0
 clock = 0
 sys = 0
+
+#Time keeping
+time_zero = datetime.datetime(19, 10, 13, 11, 00, 00)
 
 ###THREADS###
 def monitor_thread():
@@ -212,9 +216,10 @@ def change_interval(channel):
 
 #reset system time
 def reset_method(channel):
+        global time_zero
         print("reset")
-        #reset system time
-        #write to RTC??
+        time_zero = rtc_get_datetime()
+
 
 #used to initialise all inputs and outputs
 def GPIOInit():
@@ -247,10 +252,12 @@ def GPIOInit():
 #I2C needed for RTC
 def init_I2C():
         global I2C
+        global time_zero
         I2C = smbus.SMBus(1) # 1 indicates /dev/I2C-1
         address = 0x6f #whatever the device is for your I2C device
         if (not bool(I2C.read_byte_data(RTCAddr, 0x0) & 1<<7)):
             I2C.write_byte_data(RTCAddr, SEC, 0b10000000) #set ST bit
+        rtc_set_time(time_zero)
     #Optional Compensation
     #I2C.write_byte_data(RTCAddr, 0x7, 4) #Set to course trim mode (Bit 2)
     #I2C.write_byte_data(RTCAddr, 0x8, (1<<7) + 0) #Crystal Compensation amount
@@ -264,11 +271,24 @@ def init_SPI():
     spi = spidev.SpiDev()
 
 #RTC FUNCTIONS
-def rtc_set_time(hour, minute, second):
+def rtc_set_time(dt): #Takes in a date time object
     print("Set the time")
-    I2C.write_byte_data(RTCAddr, 0x0, to_bcd(second) + (1<<7))
-    I2C.write_byte_data(RTCAddr, 0x1, to_bcd(minute))
-    I2C.write_byte_data(RTCAddr, 0x2, to_bcd(hour))
+    I2C.write_byte_data(RTCAddr, 0x0, to_bcd(dt.second) + (1<<7))
+    I2C.write_byte_data(RTCAddr, 0x1, to_bcd(dt.minute))
+    I2C.write_byte_data(RTCAddr, 0x2, to_bcd(dt.hour))
+    I2C.write_byte_data(RTCAddr, 0x4, to_bcd(dt.day))
+    I2C.write_byte_data(RTCAddr, 0x5, to_bcd(dt.month))
+    I2C.write_byte_data(RTCAddr, 0x6, to_bcd(dt.year))
+
+
+def rtc_year():
+    return to_deci(I2C.read_byte_data(RTCAddr, 0x6)) & 63 #4 bit units, 4 bit tens (only use two)
+
+def rtc_month():
+    return to_deci(I2C.read_byte_data(RTCAddr, 0x5)) & 31 #4 bit units, 1 bit tens
+
+def rtc_day():
+    return to_deci(I2C.read_byte_data(RTCAddr, 0x4)) & 63 #4 bit units, 2 bit tens
 
 def rtc_hour():
     return to_deci(I2C.read_byte_data(RTCAddr, 0x2)) & 63
@@ -284,6 +304,15 @@ def rtc_makes(number): #'Make String' function
         return str(0) + str(number)
     else:
         return str(number)
+
+def rtc_get_datetime():
+    return datetime.datetime(rtc_year(), rtc_month(), rtc_day(), rtc_hour(), rtc_min(), rtc_second())
+
+def sys_time_string():
+    global time_zero
+    time_now = rtc_get_datetime()
+    diff = (time_now - time_zero)
+    return f"{diff}"#rtc_makes(diff.hour) + ":" + rtc_makes(diff.minute) + ":" + rtc_makes(diff.second)
 
 def rtc_time_string():
     hour = rtc_hour()
@@ -347,7 +376,7 @@ def monitor_adc():
     else:
         alarm = ""
     clock = rtc_time_string()
-    sys = "00:00:00"
+    sys = sys_time_string()
     print_output(clock, sys, humidity, temp_degrees, light, dac_v, alarm)
 
 def print_output(clock, sys, humidity, temp_degrees, light, dac_voltage, alarm):
