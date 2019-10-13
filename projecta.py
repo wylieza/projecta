@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 """
-Name: Samantha Ball
-Student Number: BLLSAM009
+Authors: Samantha Ball & Justin Wylie
+Student Numbers: BLLSAM009, WYLJUS002
 Prac: Project A
 Date: 30/09/2019
 """
