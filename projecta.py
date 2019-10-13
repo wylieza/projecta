@@ -24,7 +24,8 @@ import RPi.GPIO as GPIO
 import spidev
 import smbus
 import math
-
+import blynklib
+import random
 
 
 ###CONSTANTS###
@@ -32,6 +33,14 @@ RTCAddr = 0x6f;
 SEC = 0x00; 
 MIN = 0x01;
 HOUR = 0x02;
+UPPER_BOUND = 2.65
+LOWER_BOUND = 0.65
+BLYNK_AUTH = 'UB-J4q8v4H8RkrOK8JEVL32B8jcUUgQi' #Auth Token 
+#READ_PRINT_MSG = "[READ_VIRTUAL_PIN_EVENT] Pin: V{}"
+
+
+
+blynk = blynklib.Blynk(BLYNK_AUTH)
 
 ###GLOBALS###
 #define pin numbers
@@ -52,6 +61,7 @@ spi = None
 spi_ch = 0
 
 #PWM LED
+pwm = None
 pwm_channel = 13
 
 #ADC
@@ -66,6 +76,12 @@ dac_ref = 3.3
 dac_res = 8
 dac_voltage = 0
 
+#Measured Quantities
+humidity = 0
+light = 0
+temp = 0
+clock = 0
+sys = 0
 
 ###THREADS###
 def monitor_thread():
@@ -86,9 +102,11 @@ def alarm_thread():
         if (alarm_flag and (time.time()-last_trigger > 10)):
             alarm_dismissed = False
             pwm.ChangeDutyCycle(100)
+            last_trigger = time.time() #start timer when alarm triggered
             while(not alarm_dismissed):
                 pass
-            last_trigger = time.time()
+                #print("are we stuck here?")
+            #last_trigger = time.time()
             pwm.ChangeDutyCycle(0)
 
 
@@ -99,7 +117,9 @@ def main():
         while(True):
         #print("Main looping")
         #time.sleep(5)
-            pass
+            #pass
+            while True:
+                blynk.run()
             """result = I2C.read_byte_data(RTCAddr, HOUR)
             print(result)
             result = I2C.read_byte_data(RTCAddr, MIN)
@@ -109,10 +129,45 @@ def main():
             #adc = spi.readbytes(8);
             #print(adc)
     
+
+
+
+# register handler for virtual pin V11 reading                                 
+@blynk.handle_event('read V1')
+def read_virtual_pin_handler(pin):
+    global light
+    global humidity
+    global temp
+    global clock
+    global sys
+    #print(READ_PRINT_MSG.format(pin))
+    blynk.virtual_write(0, temp)
+    blynk.virtual_write(pin, light)
+    blynk.virtual_write(2, humidity)
+    blynk.virtual_write(3, dac_voltage)
+
+    if(alarm_flag==True):
+         blynk.notify('Warning critical value') # send push notification
+         blynk.virtual_write(4, 255) #turn on LED
+    else:
+        blynk.virtual_write(4, 0)
+    header = "|RTC Time|Sys Timer|Humidity|Temp|Light|DAC out|Alarm"
+    blynk.virtual_write(5, header)
+    info = f"|{clock}|{sys}|{humidity:.1f} V|{temp_degrees:.0f} C|{light:.0f}|{dac_voltage: .2f}V|{alarm}|"
+    print(info)
+    blynk.virtual_write(5, info)
+    #terminal
+    #terminal.print("|RTC Time|Sys Timer|Humidity|Temp|Light|DAC out|Alarm")
+
+            
 #begin reading
 def start_stop_method(channel):
         global running_flag
         if(running_flag==False):
+                #start alarm thread
+                alarmThread = threading.Thread(target=alarm_thread)
+                alarmThread.daemon = True
+                alarmThread.start()
 	        #start monitor thread 
                 print("start/stop reading")
                 monitorThread = threading.Thread(target=monitor_thread)
@@ -130,15 +185,13 @@ def set_alarm(channel):
         alarmThread = threading.Thread(target=alarm_thread)
         alarmThread.daemon = True
         alarmThread.start()
-        #pwm_led.ChangeFrequency(freq)
-        #pwm_led.ChangeDutyCycle(dc)
-        #pwm_led.start(dc)
-	#Note that PWM will also stop if the instance variable 'pwm_led' goes out of scope. (NB!!) - make global?
 
 #switch off PWM LED
 def alarm_dismiss(channel):
         print("alarm dismissed")
         #pwm_led.stop
+        global alarm_flag
+        alarm_flag = False
         global alarm_dismissed
         alarm_dismissed = True
 
@@ -181,8 +234,11 @@ def GPIOInit():
         GPIO.add_event_detect(21, GPIO.FALLING, callback=reset_method, bouncetime = 300)
         
         #set up PWM LED
+        global pwm
         GPIO.setup(pwm_channel, GPIO.OUT, initial=GPIO.LOW)
-        pwm_led = GPIO.PWM(pwm_channel, 1)
+        pwm = GPIO.PWM(pwm_channel, 100) #1
+        pwm.start(50)
+        pwm.ChangeDutyCycle(0)  
 
 
         #set up SPI pins
@@ -205,25 +261,6 @@ def init_SPI():
     global spi
     spi = spidev.SpiDev() 
 
-"""#SPI needed for ADC and DAC
-def SpiInit():
-    global spi
-    #Bus is 0 or 1, depending on which SPI bus you’ve connected to
-    bus = 0 #0
-    #Device is the chip select pin. Set to 0 or 1, depending on the connections
-    device = 1
-    spi = spidev.SpiDev() #Enable SPI
-    spi.open(bus, device) #Open connection to a specific bus and device (CS pin)
-    # Set settings (SPI speed and mode)
-    spi.max_speed_hz = 500000
-    spi.mode = 0 
-    #to_send = [0x01, 0x02, 0x03] #define what to send
-    #spi.xfer(to_send)
-    spi.writebytes(0b
-    adc = spi.readbytes(8);
-    print(adc)
-    # Close the SPI connection
-    #spi.close()"""
 
 def adc_read(channel):
     spi.open(0, 0) #Open connection on (bus 0, cs/device 0)                    
@@ -239,10 +276,17 @@ def adc_read(channel):
     return voltage
 
 
-def monitor_adc():                              
+def monitor_adc():
+    global alarm_flag
+    global light
+    global humidity
+    global temp
+    global dac_voltage
+    #print("still monitoring")
     temp = adc_read(0) #read temp sensor
     #print(temp)
     temp_degrees = (temp-v_degrees)/temp_coeff;
+    temp = int(temp_degrees)
     time.sleep(0.1)
     #print(str(temp_degrees) + "v")
     humidity = adc_read(1) #read potentiometer representing humidity
@@ -252,13 +296,19 @@ def monitor_adc():
     #print(str(light) + "v")
     time.sleep(0.1)
 
-    dac_voltage = (light/1023)*humidity
+    dac_v = (light/1023)*humidity
+    dac_voltage = str(round(dac_v, 2))
     #print(dac_voltage)
-    dac_set(dac_voltage)
-    alarm = "*"
+    dac_set(dac_v)
+    if((dac_v<LOWER_BOUND)|(dac_v>UPPER_BOUND)):
+        alarm_flag = True;
+    if(alarm_flag==True):
+        alarm = "*"
+    else:
+        alarm = ""
     clock = "10:17:15"
     sys = "00:00:00"
-    print_output(clock, sys, humidity, temp_degrees, light, dac_voltage, alarm)
+    print_output(clock, sys, humidity, temp_degrees, light, dac_v, alarm)
 
 def print_output(clock, sys, humidity, temp_degrees, light, dac_voltage, alarm):
     print(f"|{clock}|{sys}|{humidity:.1f} V|{temp_degrees:.0f} C|{light:.0f}|{dac_voltage: .2f}V|{alarm}|") 
@@ -283,6 +333,8 @@ if __name__ == "__main__":
         except KeyboardInterrupt:
                 print("Exiting gracefully")
                 #Turn off your GPIOs here
+                blynk.virtual_write(5, 'clr'); #clear terminal
+                blynk.virtual_write(4, 0) #switch off alarm LED
                 spi.close()
                 GPIO.cleanup()
         except e:
