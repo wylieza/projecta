@@ -385,8 +385,21 @@ def dac_set(voltage):
     spi.open(0, 1) #Open connection on (bus 0, cs/device 1)
     spi.max_speed_hz = 1350000
     spi.mode = 0b00
-    spi.xfer2([0b00111000,0])
+    dac_data_bits = voltage_to_ddb(voltage)
+    bits_6to8 = dac_data_bits&(~63) #Extract 4 MSBs
+    bits_0to7 = dac_data_bits&(63) #Extract 8 LSBs
+    spi.xfer2([(0b0011<<4) + bits_6to8,bits_0to7])
     spi.close()
+
+def voltage_to_ddb(voltage):
+    multiplier = 3.3/1023
+    if (voltage > 3.3):
+        return 1023
+    elif (voltage < 0):
+        return 0
+    else:
+        return int(multiplier*voltage)
+
 
 #Only run the functions if
 if __name__ == "__main__":
