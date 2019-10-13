@@ -103,7 +103,7 @@ def alarm_thread():
     last_trigger = 0
     alarm_flag = False
     while(True):
-        if (alarm_flag and (time.time()-last_trigger > 10)):
+        if (alarm_flag and (time.time()-last_trigger > 180)):
             alarm_dismissed = False
             pwm.ChangeDutyCycle(100)
             last_trigger = time.time() #start timer when alarm triggered
