@@ -91,7 +91,7 @@ time_zero = datetime.datetime(19, 10, 13, 11, 00, 00)
 def monitor_thread():
     global frequency
     global running_flag
-    print("|RTC Time|Sys Timer|Humidity|Temp|Light|DAC out|Alarm")
+    print("|RTC Time|Sys Timer|Humidity|Temp|Light|DAC out|Alarm|")
     while (running_flag==True):
         monitor_adc();
         time.sleep(1/frequency)
@@ -109,7 +109,6 @@ def alarm_thread():
             last_trigger = time.time() #start timer when alarm triggered
             while(not alarm_dismissed):
                 pass
-                #print("are we stuck here?")
             #last_trigger = time.time()
             pwm.ChangeDutyCycle(0)
 
@@ -155,7 +154,7 @@ def read_virtual_pin_handler(pin):
          blynk.virtual_write(4, 255) #turn on LED
     else:
         blynk.virtual_write(4, 0)
-    header = "|RTC Time|Sys Timer|Humidity|Temp|Light|DAC out|Alarm"
+    header = "|RTC Time|Sys Timer|Humidity|Temp|Light|DAC out|Alarm|"
     blynk.virtual_write(5, header)
     info = f"|{clock}|{sys}|{humidity:.1f} V|{temp_degrees:.0f} C|{light:.0f}|{dac_voltage: .2f}V|{alarm}|"
     print(info)
@@ -379,7 +378,7 @@ def monitor_adc():
     print_output(clock, sys, humidity, temp_degrees, light, dac_v, alarm)
 
 def print_output(clock, sys, humidity, temp_degrees, light, dac_voltage, alarm):
-    print(f"|{clock}|{sys}|{humidity:.1f} V|{temp_degrees:.0f} C|{light:.0f}|{dac_voltage: .2f}V|{alarm}|")
+    print(f"|{clock:>8}|{sys:>9}|{humidity:6.1f} V|{temp_degrees:2.0f} C|{light:5.0f}|{dac_voltage: 6.2f}V|{alarm:^5}|")
 
 def dac_set(voltage):
     spi.open(0, 1) #Open connection on (bus 0, cs/device 1)
