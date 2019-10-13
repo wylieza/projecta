@@ -194,8 +194,6 @@ def set_alarm(channel):
 def alarm_dismiss(channel):
         print("alarm dismissed")
         #pwm_led.stop
-        global alarm_flag
-        alarm_flag = False
         global alarm_dismissed
         alarm_dismissed = True
 
@@ -347,28 +345,32 @@ def adc_read(channel):
 
 def monitor_adc():
     global alarm_flag
+    global alarm_dismissed
     global light
     global humidity
     global temp
     global dac_voltage
-
+    #print("still monitoring")
     temp = adc_read(0) #read temp sensor
-    temp_degrees = (temp-v_degrees)/temp_coeff; #convert to Celsius
+    #print(temp)
+    temp_degrees = (temp-v_degrees)/temp_coeff;
     temp = int(temp_degrees)
     time.sleep(0.1)
+    #print(str(temp_degrees) + "v")
     humidity = adc_read(1) #read potentiometer representing humidity
+    #print(str(humidity) + "v")
     time.sleep(0.1)
-    light = adc_read(2) #read LDR
+    light = adc_read(2)
+    #print(str(light) + "v")
     time.sleep(0.1)
 
-    #dac_v = (light/1023)*humidity
-    dac_v = dac_calc(light, humidity)
+    dac_v = (light/1023)*humidity
     dac_voltage = str(round(dac_v, 2))
     #print(dac_voltage)
-    #dac_set(dac_v)
+    dac_set(dac_v)
     if((dac_v<LOWER_BOUND)|(dac_v>UPPER_BOUND)):
         alarm_flag = True;
-    if(alarm_flag==True):
+    if(not alarm_dismissed):
         alarm = "*"
     else:
         alarm = ""
@@ -378,12 +380,6 @@ def monitor_adc():
 
 def print_output(clock, sys, humidity, temp_degrees, light, dac_voltage, alarm):
     print(f"|{clock}|{sys}|{humidity:.1f} V|{temp_degrees:.0f} C|{light:.0f}|{dac_voltage: .2f}V|{alarm}|")
-
-def dac_calc(light, humidity):
-    dac_v = (light/1023)*humidity
-    dac_set(dac_v)
-    return dac_v
-
 
 def dac_set(voltage):
     spi.open(0, 1) #Open connection on (bus 0, cs/device 1)
