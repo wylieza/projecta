@@ -10,7 +10,7 @@ Date: 30/09/2019
 #ADC - temp sensor, potentiometer(humidity), LDR (light)
 #DAC - correctly calculated voltage
 #Buttons - start/stop monitoring, dismiss alarm, change reading interval, reset system time
-#Interrupts and debouncing 
+#Interrupts and debouncing
 #RTC
 #PWM output - alarm to notify issue, hard coded thresholds
 #Alarm - can only go off every 3 minutes
@@ -30,12 +30,12 @@ import random
 
 ###CONSTANTS###
 RTCAddr = 0x6f;
-SEC = 0x00; 
+SEC = 0x00;
 MIN = 0x01;
 HOUR = 0x02;
 UPPER_BOUND = 2.65
 LOWER_BOUND = 0.65
-BLYNK_AUTH = 'UB-J4q8v4H8RkrOK8JEVL32B8jcUUgQi' #Auth Token 
+BLYNK_AUTH = 'UB-J4q8v4H8RkrOK8JEVL32B8jcUUgQi' #Auth Token
 #READ_PRINT_MSG = "[READ_VIRTUAL_PIN_EVENT] Pin: V{}"
 
 
@@ -67,8 +67,8 @@ pwm_channel = 13
 #ADC
 analog_ref = 3.3
 analog_res = 10
-temp_coeff = 0.01 #10mV/C                                                     
-v_degrees = 0.5  #500mv  
+temp_coeff = 0.01 #10mV/C
+v_degrees = 0.5  #500mv
 
 
 #DAC
@@ -128,11 +128,11 @@ def main():
             print(result-0x80)"""
             #adc = spi.readbytes(8);
             #print(adc)
-    
 
 
 
-# register handler for virtual pin V11 reading                                 
+
+# register handler for virtual pin V11 reading
 @blynk.handle_event('read V1')
 def read_virtual_pin_handler(pin):
     global light
@@ -159,7 +159,7 @@ def read_virtual_pin_handler(pin):
     #terminal
     #terminal.print("|RTC Time|Sys Timer|Humidity|Temp|Light|DAC out|Alarm")
 
-            
+
 #begin reading
 def start_stop_method(channel):
         global running_flag
@@ -168,7 +168,7 @@ def start_stop_method(channel):
                 alarmThread = threading.Thread(target=alarm_thread)
                 alarmThread.daemon = True
                 alarmThread.start()
-	        #start monitor thread 
+	        #start monitor thread
                 print("start/stop reading")
                 monitorThread = threading.Thread(target=monitor_thread)
                 monitorThread.daemon = True
@@ -178,7 +178,7 @@ def start_stop_method(channel):
                 #monitorThread.wait??
                 running_flag = False
 
-        
+
 #turn on PWM LED
 def set_alarm(channel):
         print("alarm")
@@ -196,7 +196,7 @@ def alarm_dismiss(channel):
         alarm_dismissed = True
 
 
-#change reading interval                                                                                   
+#change reading interval
 def change_interval(channel):
         #print("change interval")
         #the possible frequencies are 1s, 2s and 5s.
@@ -210,12 +210,12 @@ def change_interval(channel):
         else:
                 frequency = 1
 
-#reset system time                                                                                       
+#reset system time
 def reset_method(channel):
         print("reset")
         #reset system time
         #write to RTC??
-    
+
 #used to initialise all inputs and outputs
 def GPIOInit():
         #choose Broadcom pin numbering
@@ -226,19 +226,19 @@ def GPIOInit():
         GPIO.setup(16, GPIO.IN, pull_up_down=GPIO.PUD_UP) #change read interval button
         GPIO.setup(20, GPIO.IN, pull_up_down=GPIO.PUD_UP) #alarm dismiss button
         GPIO.setup(21, GPIO.IN, pull_up_down=GPIO.PUD_UP) #reset button
-        
+
         #add edge detection to respond to push event
         GPIO.add_event_detect(12, GPIO.FALLING, callback=start_stop_method, bouncetime = 300)
         GPIO.add_event_detect(16, GPIO.FALLING, callback=change_interval, bouncetime = 300)
         GPIO.add_event_detect(20, GPIO.FALLING, callback=alarm_dismiss, bouncetime = 300)
         GPIO.add_event_detect(21, GPIO.FALLING, callback=reset_method, bouncetime = 300)
-        
+
         #set up PWM LED
         global pwm
         GPIO.setup(pwm_channel, GPIO.OUT, initial=GPIO.LOW)
         pwm = GPIO.PWM(pwm_channel, 100) #1
         pwm.start(50)
-        pwm.ChangeDutyCycle(0)  
+        pwm.ChangeDutyCycle(0)
 
 
         #set up SPI pins
@@ -247,26 +247,66 @@ def GPIOInit():
 #I2C needed for RTC
 def init_I2C():
         global I2C
-        I2C = smbus.SMBus(1) # 1 indicates /dev/i2c-1
-        address = 0x6f #whatever the device is for your i2c device
-        I2C.write_byte_data(RTCAddr, SEC, 0b10000000) #set ST bit 
-        result = I2C.read_byte_data(RTCAddr, HOUR)
-        print(result)
+        I2C = smbus.SMBus(1) # 1 indicates /dev/I2C-1
+        address = 0x6f #whatever the device is for your I2C device
+        if (not bool(I2C.read_byte_data(RTCAddr, 0x0) & 1<<7)):
+            I2C.write_byte_data(RTCAddr, SEC, 0b10000000) #set ST bit
+    #Optional Compensation
+    #I2C.write_byte_data(RTCAddr, 0x7, 4) #Set to course trim mode (Bit 2)
+    #I2C.write_byte_data(RTCAddr, 0x8, (1<<7) + 0) #Crystal Compensation amount
 
 
 def init_SPI():
     #DAC
     GPIO.setup(17, GPIO.OUT)
-    GPIO.output(17, GPIO.HIGH) #Latch dac if wanted   
+    GPIO.output(17, GPIO.HIGH) #Latch dac if wanted
     global spi
-    spi = spidev.SpiDev() 
+    spi = spidev.SpiDev()
+
+#RTC FUNCTIONS
+def rtc_set_time(hour, minute, second):
+    print("Set the time")
+    I2C.write_byte_data(RTCAddr, 0x0, to_bcd(second) + (1<<7))
+    I2C.write_byte_data(RTCAddr, 0x1, to_bcd(minute))
+    I2C.write_byte_data(RTCAddr, 0x2, to_bcd(hour))
+
+def rtc_hour():
+    return to_deci(I2C.read_byte_data(RTCAddr, 0x2)) & 63
+
+def rtc_min():
+    return to_deci(I2C.read_byte_data(RTCAddr, 0x1))
+
+def rtc_second():
+    return to_deci(I2C.read_byte_data(RTCAddr, 0x0)&127)
+
+def rtc_makes(number): #'Make String' function
+    if (number < 10):
+        return str(0) + str(number)
+    else:
+        return str(number)
+
+def rtc_time_string():
+    hour = rtc_hour()
+    minute = rtc_min()
+    second = rtc_second()
+    return rtc_makes(hour) + ":" + rtc_makes(minute) + ":" + rtc_makes(second)
+
+def to_bcd(num): #Assumes number less than 60
+    units = num%10
+    tens = (int(num/10))<<4
+    return tens+units
+
+def to_deci(num):
+    units = num & 15
+    tens = (num>>4)*10
+    return tens+units
 
 
 def adc_read(channel):
-    spi.open(0, 0) #Open connection on (bus 0, cs/device 0)                    
+    spi.open(0, 0) #Open connection on (bus 0, cs/device 0)
     spi.max_speed_hz = 1350000
-    spi.mode = 0b00    
-    bytes = spi.xfer2([1,(8+channel)<<4,0]) #Read from ADC           
+    spi.mode = 0b00
+    bytes = spi.xfer2([1,(8+channel)<<4,0]) #Read from ADC
     spi.close()
     value = ((bytes[1]&3)<<8)+bytes[2]
     if(channel!=2):
@@ -306,20 +346,20 @@ def monitor_adc():
         alarm = "*"
     else:
         alarm = ""
-    clock = "10:17:15"
+    clock = rtc_time_string()
     sys = "00:00:00"
     print_output(clock, sys, humidity, temp_degrees, light, dac_v, alarm)
 
 def print_output(clock, sys, humidity, temp_degrees, light, dac_voltage, alarm):
-    print(f"|{clock}|{sys}|{humidity:.1f} V|{temp_degrees:.0f} C|{light:.0f}|{dac_voltage: .2f}V|{alarm}|") 
+    print(f"|{clock}|{sys}|{humidity:.1f} V|{temp_degrees:.0f} C|{light:.0f}|{dac_voltage: .2f}V|{alarm}|")
 
 def dac_set(voltage):
-    spi.open(0, 1) #Open connection on (bus 0, cs/device 1)                   
+    spi.open(0, 1) #Open connection on (bus 0, cs/device 1)
     spi.max_speed_hz = 1350000
     spi.mode = 0b00
     spi.xfer2([0b00111000,0])
     spi.close()
-    
+
 #Only run the functions if
 if __name__ == "__main__":
     #Make sure the GPIO is stopped correctly
