@@ -1,5 +1,6 @@
 from smbus2 import SMBus #Import i2c libary
 import time
+import datetime
 
 rtc_address = 0x6f #Save the control code and cs bits 1101111
 
@@ -51,14 +52,18 @@ def to_deci(num):
     return tens+units
 
 rtc_init() #Always call this on startup
-rtc_set_time(21, 5, 0) #Set the time here
-
+dt = datetime.datetime.now()
+#rtc_set_time(dt.hour, dt.minute, dt.second) #Set the time here
+print("recall time")
 
 i2c.write_byte_data(rtc_address, 0x8, (1<<7)) #behind
 
 try:
     while (True):
+        last_sec = rtc_second()
+        while(last_sec == rtc_second()):
+            time.sleep(0.001)
         print(rtc_time_string())
-        time.sleep(0.01)
+
 except KeyboardInterrupt:
     i2c.close()

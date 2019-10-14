@@ -103,9 +103,13 @@ def alarm_thread():
 ########################
 #Setup Interrupts
 ########################
-GPIO.add_event_detect(btn1, GPIO.FALLING, callback=alarm_dismiss, bouncetime=200)
+GPIO.add_event_detect(btn1, \
+    GPIO.FALLING, \
+    callback=alarm_dismiss, \
+    bouncetime=200)
 GPIO.add_event_detect(btn2, GPIO.FALLING, callback=reset, bouncetime=200)
-GPIO.add_event_detect(btn3, GPIO.FALLING, callback=frequency_toggle, bouncetime=200)
+GPIO.add_event_detect(btn3, GPIO.FALLING, \
+    callback=frequency_toggle, bouncetime=200)
 GPIO.add_event_detect(btn4, GPIO.FALLING, callback=stop, bouncetime=200)
 
 ########################
