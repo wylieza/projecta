@@ -99,7 +99,7 @@ def monitor_thread():
     print("|RTC Time|Sys Timer|Humidity|Temp|Light|DAC out|Alarm|")
     while (running_flag==True):
         monitor_adc();
-        time.sleep(1/frequency)
+        rtc_sleep(frequency)
 
 def alarm_thread():
     global pwm
@@ -328,6 +328,14 @@ def to_deci(num):
     units = num & 15
     tens = (num>>4)*10
     return tens+units
+
+def rtc_sleep(frequency):
+    if (frequency == 1):
+        rtc_initial_s = rtc_second()
+        while(rtc_second() == rtc_initial_s):
+            time.sleep(0.05)
+    else:
+        time.sleep(1/frequency)
 
 
 def adc_read(channel):
