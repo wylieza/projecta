@@ -151,7 +151,7 @@ def read_virtual_pin_handler(pin):
          blynk.virtual_write(4, 255) #turn on LED
     else:
         blynk.virtual_write(4, 0)#switch off LED
-        
+
     #print heading if first loop
     if (first == True):
         header = "|RTC Time|Sys Timer|Humidity|Temp|Light|DAC out|Alarm|"
@@ -159,7 +159,7 @@ def read_virtual_pin_handler(pin):
         first = False #ensure header only printed once
 
     #print("testing")
-    #print values to terminal    
+    #print values to terminal
     info = f"|{clock}|{sys}|{humidity:.1f} V|{temp_degrees:.0f} C|{light:.0f}|{dac_voltage: .2f}V|{alarm}|"
     #print("Info" +info)
     blynk.virtual_write(5, info)
@@ -388,9 +388,11 @@ def dac_set(voltage):
     spi.max_speed_hz = 1350000
     spi.mode = 0b00
     dac_data_bits = voltage_to_ddb(voltage)
-    bits_6to10 = dac_data_bits&(~63) #Extract 4 MSBs
+    print(dac_data_bits)
+    bits_6to10 = (dac_data_bits>>6)&(15) #Extract 4 MSBs
     bits_0to5 = dac_data_bits&(63) #Extract 6 LSBs
-    spi.xfer2([(0b0011<<4) + (bits_6to10>>6),bits_0to5<<2])
+    print(str(bin(bits_6to10)) + str(bin(bits_0to5)))
+    spi.xfer2([(0b0011<<4) + bits_6to10, bits_0to5<<2])
     spi.close()
 
 def voltage_to_ddb(voltage):
