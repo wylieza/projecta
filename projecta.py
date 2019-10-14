@@ -95,7 +95,6 @@ reset_interrupt = False
 
 ###THREADS###
 def monitor_thread():
-    global frequency
     global running_flag
     print("|RTC Time|Sys Timer|Humidity|Temp|Light|DAC out|Alarm|")
     while (running_flag==True):
@@ -115,16 +114,14 @@ def alarm_thread():
             last_trigger = time.time() #start timer when alarm triggered
             while(not alarm_dismissed):
                 pass
-            #last_trigger = time.time()
             pwm.ChangeDutyCycle(0)
 
 
 ###FUNCTIONS###
 def main():
-	#loop
-        #Blynk connectivity
-        while (True):
-            blynk.run()
+    #Blynk connectivity
+    while (True):
+        blynk.run()
 
 
 
@@ -170,19 +167,15 @@ def read_virtual_pin_handler(pin):
 def start_stop_method(channel):
         global running_flag
         if(running_flag==False):
-                #start alarm thread
-                alarmThread = threading.Thread(target=alarm_thread)
-                alarmThread.daemon = True
-                alarmThread.start()
 	        #start monitor thread
-                print("start/stop reading")
-                monitorThread = threading.Thread(target=monitor_thread)
-                monitorThread.daemon = True
-                running_flag = True
-                monitorThread.start()
+            print("start/stop reading")
+            monitorThread = threading.Thread(target=monitor_thread)
+            monitorThread.daemon = True
+            running_flag = True
+            monitorThread.start()
         else:
-                #flag to pause monitoring
-                running_flag = False
+            #flag to pause monitoring
+            running_flag = False
 
 
 #turn on PWM LED
@@ -335,7 +328,6 @@ def to_deci(num):
 def rtc_sleep(): #Assumes frequency one of: 1s, 2s, 5s
     global frequency
     global reset_interrupt
-    tz_initial = time_zero
     seconds_inital = rtc_second()
     time_elapsed = 0
 
@@ -371,30 +363,25 @@ def monitor_adc():
     global humidity
     global temp
     global dac_voltage
-    #print("still monitoring")
     temp = adc_read(0) #read temp sensor
-    #print(temp)
     temp_degrees = (temp-v_degrees)/temp_coeff;
     temp = int(temp_degrees)
-    #time.sleep(0.1)
-    #print(str(temp_degrees) + "v")
     humidity = adc_read(1) #read potentiometer representing humidity
-    #print(str(humidity) + "v")
-    #time.sleep(0.1)
     light = adc_read(2)
-    #print(str(light) + "v")
-    #time.sleep(0.1)
 
     dac_v = (light/1023)*humidity
     dac_voltage = str(round(dac_v, 2))
-    #print(dac_voltage)
     dac_set(dac_v)
-    if((dac_v<LOWER_BOUND)|(dac_v>UPPER_BOUND)):
-        alarm_flag = True;
+
+    if((dac_v<LOWER_BOUND) | (dac_v>UPPER_BOUND)):
+        alarm_flag = True
+    else:
+        alarm_flag = False
     if(not alarm_dismissed):
         alarm = "*"
     else:
         alarm = ""
+
     clock = rtc_time_string()
     sys = sys_time_string()
     print_output(clock, sys, humidity, temp_degrees, light, dac_v, alarm)
@@ -430,6 +417,12 @@ if __name__ == "__main__":
                 init_I2C();
                 init_SPI();
                 print("GPIO set up")
+
+                #start alarm thread
+                alarmThread = threading.Thread(target=alarm_thread)
+                alarmThread.daemon = True
+                alarmThread.start()
+
                 while True:
                         main()
         except KeyboardInterrupt:
