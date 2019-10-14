@@ -40,8 +40,10 @@ BLYNK_AUTH = 'UB-J4q8v4H8RkrOK8JEVL32B8jcUUgQi' #Auth Token
 #READ_PRINT_MSG = "[READ_VIRTUAL_PIN_EVENT] Pin: V{}"
 
 
-
+#Blnyk
 blynk = blynklib.Blynk(BLYNK_AUTH)
+first = True
+WRITE_EVENT_PRINT_MSG = "[WRITE_VIRTUAL_PIN_EVENT] Pin: V{} Value: '{}'"
 
 ###GLOBALS###
 #define pin numbers
@@ -85,13 +87,16 @@ clock = 0
 sys = 0
 
 #Time keeping
-time_zero = datetime.datetime(19, 10, 13, 11, 00, 00)
+#time_zero = datetime.datetime(19, 10, 13, 11, 00, 00)
+dt_now = datetime.datetime.now()
+time_zero = datetime.datetime(19, 10, 15, dt_now.hour, dt_now.minute, dt_now.second)
+alarm = ""
 
 ###THREADS###
 def monitor_thread():
     global frequency
     global running_flag
-    print("|RTC Time|Sys Timer|Humidity|Temp|Light|DAC out|Alarm")
+    print("|RTC Time|Sys Timer|Humidity|Temp|Light|DAC out|Alarm|")
     while (running_flag==True):
         monitor_adc();
         time.sleep(1/frequency)
@@ -109,30 +114,16 @@ def alarm_thread():
             last_trigger = time.time() #start timer when alarm triggered
             while(not alarm_dismissed):
                 pass
-                #print("are we stuck here?")
             #last_trigger = time.time()
             pwm.ChangeDutyCycle(0)
 
 
 ###FUNCTIONS###
-#test program to toggle LED
 def main():
 	#loop
-        while(True):
-        #print("Main looping")
-        #time.sleep(5)
-            #pass
-            while True:
-                blynk.run()
-            """result = I2C.read_byte_data(RTCAddr, HOUR)
-            print(result)
-            result = I2C.read_byte_data(RTCAddr, MIN)
-            print(result)
-            result = I2C.read_byte_data(RTCAddr, SEC)
-            print(result-0x80)"""
-            #adc = spi.readbytes(8);
-            #print(adc)
-
+        #Blynk connectivity
+        while (True):
+            blynk.run()
 
 
 
@@ -144,24 +135,34 @@ def read_virtual_pin_handler(pin):
     global temp
     global clock
     global sys
-    #print(READ_PRINT_MSG.format(pin))
+    global first
+    #print(WRITE_EVENT_PRINT_MSG.format(pin, value))
+    #write values to virtual pins
     blynk.virtual_write(0, temp)
     blynk.virtual_write(pin, light)
     blynk.virtual_write(2, humidity)
     blynk.virtual_write(3, dac_voltage)
-
-    if(alarm_flag==True):
+    time_string = sys_time_string()
+    blynk.virtual_write(6, sys_time_string())
+    #print(WRITE_EVENT_PRINT_MSG.format(pin, value))
+    #update alarm status
+    if(alarm=='*'):
          blynk.notify('Warning critical value') # send push notification
          blynk.virtual_write(4, 255) #turn on LED
     else:
-        blynk.virtual_write(4, 0)
-    header = "|RTC Time|Sys Timer|Humidity|Temp|Light|DAC out|Alarm"
-    blynk.virtual_write(5, header)
+        blynk.virtual_write(4, 0)#switch off LED
+        
+    #print heading if first loop
+    if (first == True):
+        header = "|RTC Time|Sys Timer|Humidity|Temp|Light|DAC out|Alarm|"
+        blynk.virtual_write(5, header)
+        first = False #ensure header only printed once
+
+    #print("testing")
+    #print values to terminal    
     info = f"|{clock}|{sys}|{humidity:.1f} V|{temp_degrees:.0f} C|{light:.0f}|{dac_voltage: .2f}V|{alarm}|"
-    print(info)
+    #print("Info" +info)
     blynk.virtual_write(5, info)
-    #terminal
-    #terminal.print("|RTC Time|Sys Timer|Humidity|Temp|Light|DAC out|Alarm")
 
 
 #begin reading
@@ -179,7 +180,7 @@ def start_stop_method(channel):
                 running_flag = True
                 monitorThread.start()
         else:
-                #monitorThread.wait??
+                #flag to pause monitoring
                 running_flag = False
 
 
@@ -344,6 +345,7 @@ def adc_read(channel):
 
 
 def monitor_adc():
+    global alarm
     global alarm_flag
     global alarm_dismissed
     global light
@@ -355,14 +357,14 @@ def monitor_adc():
     #print(temp)
     temp_degrees = (temp-v_degrees)/temp_coeff;
     temp = int(temp_degrees)
-    time.sleep(0.1)
+    #time.sleep(0.1)
     #print(str(temp_degrees) + "v")
     humidity = adc_read(1) #read potentiometer representing humidity
     #print(str(humidity) + "v")
-    time.sleep(0.1)
+    #time.sleep(0.1)
     light = adc_read(2)
     #print(str(light) + "v")
-    time.sleep(0.1)
+    #time.sleep(0.1)
 
     dac_v = (light/1023)*humidity
     dac_voltage = str(round(dac_v, 2))
@@ -379,18 +381,16 @@ def monitor_adc():
     print_output(clock, sys, humidity, temp_degrees, light, dac_v, alarm)
 
 def print_output(clock, sys, humidity, temp_degrees, light, dac_voltage, alarm):
-    print(f"|{clock}|{sys}|{humidity:.1f} V|{temp_degrees:.0f} C|{light:.0f}|{dac_voltage: .2f}V|{alarm}|")
+    print(f"|{clock:>8}|{sys:>9}|{humidity:6.1f} V|{temp_degrees:2.0f} C|{light:5.0f}|{dac_voltage: 6.2f}V|{alarm:^5}|")
 
 def dac_set(voltage):
     spi.open(0, 1) #Open connection on (bus 0, cs/device 1)
     spi.max_speed_hz = 1350000
     spi.mode = 0b00
     dac_data_bits = voltage_to_ddb(voltage)
-    print(dac_data_bits)
-    bits_6to10 = (dac_data_bits>>6)&(15) #Extract 4 MSBs
+    bits_6to10 = dac_data_bits&(~63) #Extract 4 MSBs
     bits_0to5 = dac_data_bits&(63) #Extract 6 LSBs
-    print(str(bin(bits_6to10)) + str(bin(bits_0to5)))
-    spi.xfer2([(0b0011<<4) + bits_6to10, bits_0to5<<2])
+    spi.xfer2([(0b0011<<4) + (bits_6to10>>6),bits_0to5<<2])
     spi.close()
 
 def voltage_to_ddb(voltage):
