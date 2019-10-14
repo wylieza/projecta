@@ -85,7 +85,10 @@ clock = 0
 sys = 0
 
 #Time keeping
-time_zero = datetime.datetime(19, 10, 13, 11, 00, 00)
+#time_zero = datetime.datetime(19, 10, 13, 11, 00, 00)
+dt_now = datetime.datetime.now()
+time_zero = datetime.datetime(19, 10, 15, dt_now.hour, dt_now.minute, dt_now.second)
+alarm = ""
 
 ###THREADS###
 def monitor_thread():
@@ -148,16 +151,18 @@ def read_virtual_pin_handler(pin):
     blynk.virtual_write(pin, light)
     blynk.virtual_write(2, humidity)
     blynk.virtual_write(3, dac_voltage)
+    time_string = sys_time_string()
+    blynk.virtual_write(6, sys_time_string())
 
-    if(alarm_flag==True):
+    if(alarm=='*'):
          blynk.notify('Warning critical value') # send push notification
          blynk.virtual_write(4, 255) #turn on LED
     else:
         blynk.virtual_write(4, 0)
-    header = "|RTC Time|Sys Timer|Humidity|Temp|Light|DAC out|Alarm|"
-    blynk.virtual_write(5, header)
+    #header = "|RTC Time|Sys Timer|Humidity|Temp|Light|DAC out|Alarm|"
+    #blynk.virtual_write(5, header)
     info = f"|{clock}|{sys}|{humidity:.1f} V|{temp_degrees:.0f} C|{light:.0f}|{dac_voltage: .2f}V|{alarm}|"
-    print(info)
+    print("Info" +info)
     blynk.virtual_write(5, info)
     #terminal
     #terminal.print("|RTC Time|Sys Timer|Humidity|Temp|Light|DAC out|Alarm")
@@ -343,6 +348,7 @@ def adc_read(channel):
 
 
 def monitor_adc():
+    global alarm
     global alarm_flag
     global alarm_dismissed
     global light
@@ -354,14 +360,14 @@ def monitor_adc():
     #print(temp)
     temp_degrees = (temp-v_degrees)/temp_coeff;
     temp = int(temp_degrees)
-    time.sleep(0.1)
+    #time.sleep(0.1)
     #print(str(temp_degrees) + "v")
     humidity = adc_read(1) #read potentiometer representing humidity
     #print(str(humidity) + "v")
-    time.sleep(0.1)
+    #time.sleep(0.1)
     light = adc_read(2)
     #print(str(light) + "v")
-    time.sleep(0.1)
+    #time.sleep(0.1)
 
     dac_v = (light/1023)*humidity
     dac_voltage = str(round(dac_v, 2))
