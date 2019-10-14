@@ -328,6 +328,7 @@ def to_deci(num):
 def rtc_sleep(): #Assumes frequency one of: 1s, 2s, 5s
     global frequency
     global reset_interrupt
+    global running_flag
     seconds_inital = rtc_second()
     time_elapsed = 0
 
@@ -338,7 +339,9 @@ def rtc_sleep(): #Assumes frequency one of: 1s, 2s, 5s
         if(reset_interrupt):
             reset_interrupt = False
             break
-        time.sleep(0.01)
+        if(not running_flag):
+            break
+        #time.sleep(0.001)
 
 
 def adc_read(channel):
