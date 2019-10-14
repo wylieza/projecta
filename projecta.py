@@ -388,10 +388,8 @@ def dac_set(voltage):
     spi.max_speed_hz = 1350000
     spi.mode = 0b00
     dac_data_bits = voltage_to_ddb(voltage)
-    print(dac_data_bits)
     bits_6to10 = (dac_data_bits>>6)&(15) #Extract 4 MSBs
     bits_0to5 = dac_data_bits&(63) #Extract 6 LSBs
-    print(str(bin(bits_6to10)) + str(bin(bits_0to5)))
     spi.xfer2([(0b0011<<4) + bits_6to10, bits_0to5<<2])
     spi.close()
 
