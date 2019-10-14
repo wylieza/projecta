@@ -6,6 +6,17 @@ Prac: Project A
 Date: 30/09/2019
 """
 
+#TODO
+#ADC - temp sensor, potentiometer(humidity), LDR (light)
+#DAC - correctly calculated voltage
+#Buttons - start/stop monitoring, dismiss alarm, change reading interval, reset system time
+#Interrupts and debouncing
+#RTC
+#PWM output - alarm to notify issue, hard coded thresholds
+#Alarm - can only go off every 3 minutes
+#Connect to Blynk? - view live logging info (system time and ADC values), alarm notifications
+#Print values to screen in correct format - RTC Time| Sys Timer| Humidity| Temp| Light| DAC Out| Alarm
+
 #import Relevant Libraries
 import threading
 import time
@@ -26,7 +37,13 @@ HOUR = 0x02;
 UPPER_BOUND = 2.65
 LOWER_BOUND = 0.65
 BLYNK_AUTH = 'UB-J4q8v4H8RkrOK8JEVL32B8jcUUgQi' #Auth Token
+#READ_PRINT_MSG = "[READ_VIRTUAL_PIN_EVENT] Pin: V{}"
 
+
+#Blnyk
+blynk = blynklib.Blynk(BLYNK_AUTH)
+first = True
+WRITE_EVENT_PRINT_MSG = "[WRITE_VIRTUAL_PIN_EVENT] Pin: V{} Value: '{}'"
 
 ###GLOBALS###
 #define pin numbers
@@ -36,7 +53,6 @@ freq_btn = 16
 dismiss_btn = 20
 reset_btn = 21
 
-#Flags
 frequency = 1 #Default freq for monitoring is 1Hz
 alarm_flag = False #Set when voltage boundry breached or recovers
 alarm_dismissed = False #Once alarm is triggered, only stop alarming when it is user dismissed
@@ -57,9 +73,10 @@ analog_res = 10
 temp_coeff = 0.01 #10mV/C
 v_degrees = 0.5  #500mv
 
+
 #DAC
 dac_ref = 3.3
-dac_res = 10
+dac_res = 8
 dac_voltage = 0
 
 #Measured Quantities
@@ -70,15 +87,11 @@ clock = 0
 sys = 0
 
 #Time keeping
+#time_zero = datetime.datetime(19, 10, 13, 11, 00, 00)
 dt_now = datetime.datetime.now()
 time_zero = datetime.datetime(19, 10, 15, dt_now.hour, dt_now.minute, dt_now.second)
 alarm = ""
-
-#Blynk                                                                         
-blynk = blynklib.Blynk(BLYNK_AUTH)
-first = True
-#WRITE_EVENT_PRINT_MSG = "[WRITE_VIRTUAL_PIN_EVENT] Pin: V{}"
-
+reset_interrupt = False
 
 ###THREADS###
 def monitor_thread():
@@ -87,7 +100,7 @@ def monitor_thread():
     print("|RTC Time|Sys Timer|Humidity|Temp|Light|DAC out|Alarm|")
     while (running_flag==True):
         monitor_adc();
-        rtc_sleep(frequency)
+        rtc_sleep()
 
 def alarm_thread():
     global pwm
@@ -115,7 +128,7 @@ def main():
 
 
 
-# register handler for virtual pin V1 reading
+# register handler for virtual pin V11 reading
 @blynk.handle_event('read V1')
 def read_virtual_pin_handler(pin):
     global light
@@ -124,7 +137,7 @@ def read_virtual_pin_handler(pin):
     global clock
     global sys
     global first
-
+    #print(WRITE_EVENT_PRINT_MSG.format(pin, value))
     #write values to virtual pins
     blynk.virtual_write(0, temp)
     blynk.virtual_write(pin, light)
@@ -132,9 +145,9 @@ def read_virtual_pin_handler(pin):
     blynk.virtual_write(3, dac_voltage)
     time_string = sys_time_string()
     blynk.virtual_write(6, sys_time_string())
-
+    #print(WRITE_EVENT_PRINT_MSG.format(pin, value))
     #update alarm status
-    if(alarm =='*'):
+    if(alarm=='*'):
          blynk.notify('Warning critical value') # send push notification
          blynk.virtual_write(4, 255) #turn on LED
     else:
@@ -145,6 +158,12 @@ def read_virtual_pin_handler(pin):
         header = "|RTC Time|Sys Timer|Humidity|Temp|Light|DAC out|Alarm|"
         blynk.virtual_write(5, header)
         first = False #ensure header only printed once
+
+    #print("testing")
+    #print values to terminal
+    info = f"|{clock}|{sys}|{humidity:.1f} V|{temp_degrees:.0f} C|{light:.0f}|{dac_voltage: .2f}V|{alarm}|"
+    #print("Info" +info)
+    blynk.virtual_write(5, info)
 
 
 #begin reading
@@ -185,6 +204,7 @@ def alarm_dismiss(channel):
 def change_interval(channel):
         #print("change interval")
         #the possible frequencies are 1s, 2s and 5s.
+        #The frequency must loop between those values per event occurrence
         print("Frequency toggled!")
         global frequency
         if (frequency == 1):
@@ -197,9 +217,10 @@ def change_interval(channel):
 #reset system time
 def reset_method(channel):
         global time_zero
+        global reset_interrupt
         print("reset")
         time_zero = rtc_get_datetime()
-        blynk.virtual_write(5, 'clr'); #clear terminal 
+        reset_interrupt = True
 
 
 #used to initialise all inputs and outputs
@@ -208,8 +229,8 @@ def GPIOInit():
         GPIO.setmode(GPIO.BCM)
 
         #set up buttons with pull up resistors
-        GPIO.setup(start_btn, GPIO.IN, pull_up_down=GPIO.PUD_UP) #start button
-        GPIO.setup(16, GPIO.IN, pull_up_down=GPIO.PUD_UP) #change freq button
+        GPIO.setup(start_btn, GPIO.IN, pull_up_down=GPIO.PUD_UP) #start button 12
+        GPIO.setup(16, GPIO.IN, pull_up_down=GPIO.PUD_UP) #change read interval button
         GPIO.setup(20, GPIO.IN, pull_up_down=GPIO.PUD_UP) #alarm dismiss button
         GPIO.setup(21, GPIO.IN, pull_up_down=GPIO.PUD_UP) #reset button
 
@@ -226,12 +247,16 @@ def GPIOInit():
         pwm.start(50)
         pwm.ChangeDutyCycle(0)
 
+
+        #set up SPI pins
+        #GPIO.setup(8, GPIO.OUT) #unnecessary?
+
 #I2C needed for RTC
 def init_I2C():
         global I2C
         global time_zero
         I2C = smbus.SMBus(1) # 1 indicates /dev/I2C-1
-        address = 0x6f #I2C device ID
+        address = 0x6f #whatever the device is for your I2C device
         if (not bool(I2C.read_byte_data(RTCAddr, 0x0) & 1<<7)):
             I2C.write_byte_data(RTCAddr, SEC, 0b10000000) #set ST bit
         rtc_set_time(time_zero)
@@ -307,13 +332,21 @@ def to_deci(num):
     tens = (num>>4)*10
     return tens+units
 
-def rtc_sleep(frequency):
-    if (frequency == 1):
-        rtc_initial_s = rtc_second()
-        while(rtc_second() == rtc_initial_s):
-            time.sleep(0.05)
-    else:
-        time.sleep(1/frequency)
+def rtc_sleep(): #Assumes frequency one of: 1s, 2s, 5s
+    global frequency
+    global reset_interrupt
+    tz_initial = time_zero
+    seconds_inital = rtc_second()
+    time_elapsed = 0
+
+    while(time_elapsed < frequency):
+        time_elapsed = rtc_second() - seconds_inital
+        if (time_elapsed < 0):
+            time_elapsed += 60
+        if(reset_interrupt):
+            reset_interrupt = False
+            break
+        time.sleep(0.01)
 
 
 def adc_read(channel):
@@ -322,8 +355,6 @@ def adc_read(channel):
     spi.mode = 0b00
     bytes = spi.xfer2([1,(8+channel)<<4,0]) #Read from ADC
     spi.close()
-
-    #format value
     value = ((bytes[1]&3)<<8)+bytes[2]
     if(channel!=2):
         voltage = (analog_ref/(math.pow(2,analog_res)-1))*value
@@ -342,16 +373,22 @@ def monitor_adc():
     global dac_voltage
     #print("still monitoring")
     temp = adc_read(0) #read temp sensor
-    temp_degrees = (temp-v_degrees)/temp_coeff; #convert to Celsius
+    #print(temp)
+    temp_degrees = (temp-v_degrees)/temp_coeff;
     temp = int(temp_degrees)
+    #time.sleep(0.1)
+    #print(str(temp_degrees) + "v")
     humidity = adc_read(1) #read potentiometer representing humidity
-    light = adc_read(2) #read light value
+    #print(str(humidity) + "v")
+    #time.sleep(0.1)
+    light = adc_read(2)
+    #print(str(light) + "v")
+    #time.sleep(0.1)
 
-    #calculate DAC voltage
     dac_v = (light/1023)*humidity
     dac_voltage = str(round(dac_v, 2))
+    #print(dac_voltage)
     dac_set(dac_v)
-    #check if DAC voltage out of bounds
     if((dac_v<LOWER_BOUND)|(dac_v>UPPER_BOUND)):
         alarm_flag = True;
     if(not alarm_dismissed):
@@ -362,11 +399,8 @@ def monitor_adc():
     sys = sys_time_string()
     print_output(clock, sys, humidity, temp_degrees, light, dac_v, alarm)
 
-    
 def print_output(clock, sys, humidity, temp_degrees, light, dac_voltage, alarm):
     print(f"|{clock:>8}|{sys:>9}|{humidity:6.1f} V|{temp_degrees:2.0f} C|{light:5.0f}|{dac_voltage: 6.2f}V|{alarm:^5}|")
-    blynkString = clock +" " + sys +" "+ str(round(humidity,1)) +" "+ str(round(temp_degrees,0)) + " "+str(round(light,0)) + " " +str(round(dac_voltage,2)) + " "+ alarm  + "\n"    
-    blynk.virtual_write(5, blynkString)
 
 def dac_set(voltage):
     spi.open(0, 1) #Open connection on (bus 0, cs/device 1)
