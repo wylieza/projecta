@@ -6,16 +6,6 @@ Prac: Project A
 Date: 30/09/2019
 """
 
-#TODO
-#ADC - temp sensor, potentiometer(humidity), LDR (light)
-#DAC - correctly calculated voltage
-#Buttons - start/stop monitoring, dismiss alarm, change reading interval, reset system time
-#Interrupts and debouncing
-#RTC
-#PWM output - alarm to notify issue, hard coded thresholds
-#Alarm - can only go off every 3 minutes
-#Connect to Blynk? - view live logging info (system time and ADC values), alarm notifications
-#Print values to screen in correct format - RTC Time| Sys Timer| Humidity| Temp| Light| DAC Out| Alarm
 
 #import Relevant Libraries
 import threading
@@ -39,13 +29,12 @@ LOWER_BOUND = 0.65
 BLYNK_AUTH = 'UB-J4q8v4H8RkrOK8JEVL32B8jcUUgQi' #Auth Token
 #READ_PRINT_MSG = "[READ_VIRTUAL_PIN_EVENT] Pin: V{}"
 
-
-#Blnyk
+###GLOBALS### 
+#Blynk
 blynk = blynklib.Blynk(BLYNK_AUTH)
 first = True
-WRITE_EVENT_PRINT_MSG = "[WRITE_VIRTUAL_PIN_EVENT] Pin: V{} Value: '{}'"
+#WRITE_EVENT_PRINT_MSG = "[WRITE_VIRTUAL_PIN_EVENT] Pin: V{} Value: '{}'"
 
-###GLOBALS###
 #define pin numbers
 #Buttons
 start_btn = 12
@@ -125,7 +114,7 @@ def main():
 
 
 
-# register handler for virtual pin V11 reading
+# register handler for virtual pin V1 reading
 @blynk.handle_event('read V1')
 def read_virtual_pin_handler(pin):
     global light
@@ -155,12 +144,6 @@ def read_virtual_pin_handler(pin):
         header = "|RTC Time|Sys Timer|Humidity|Temp|Light|DAC out|Alarm|"
         blynk.virtual_write(5, header)
         first = False #ensure header only printed once
-
-    #print("testing")
-    #print values to terminal
-    info = f"|{clock}|{sys}|{humidity:.1f} V|{temp_degrees:.0f} C|{light:.0f}|{dac_voltage: .2f}V|{alarm}|"
-    #print("Info" +info)
-    blynk.virtual_write(5, info)
 
 
 #begin reading
@@ -213,6 +196,7 @@ def reset_method(channel):
         global reset_interrupt
         print("reset")
         time_zero = rtc_get_datetime()
+        blynk.virtual_write(5, 'clr'); #clear terminal 
         reset_interrupt = True
 
 
@@ -391,6 +375,10 @@ def monitor_adc():
 
 def print_output(clock, sys, humidity, temp_degrees, light, dac_voltage, alarm):
     print(f"|{clock:>8}|{sys:>9}|{humidity:6.1f} V|{temp_degrees:2.0f} C|{light:5.0f}|{dac_voltage: 6.2f}V|{alarm:^5}|")
+    blynkString = clock +" " + sys +" "+ str(round(humidity,1)) +" "+ str(round\
+(temp_degrees,0)) + " "+str(round(light,0)) + " " +str(round(dac_voltage,2)) + \
+" "+ alarm  + "\n"
+    blynk.virtual_write(5, blynkString)
 
 def dac_set(voltage):
     spi.open(0, 1) #Open connection on (bus 0, cs/device 1)
