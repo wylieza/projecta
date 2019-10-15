@@ -44,7 +44,7 @@ reset_btn = 21
 
 frequency = 1 #Default freq for monitoring is 1Hz
 alarm_flag = False #Set when voltage boundry breached or recovers
-alarm_dismissed = False #Once alarm is triggered, only stop alarming when it is user dismissed
+alarm_dismissed = True #Once alarm is triggered, only stop alarming when it is user dismissed
 running_flag = False
 
 #SPI
@@ -123,13 +123,13 @@ def read_virtual_pin_handler(pin):
     global clock
     global sys
     global first
-    #print(WRITE_EVENT_PRINT_MSG.format(pin, value))
+
     #write values to virtual pins
     blynk.virtual_write(0, temp)
     blynk.virtual_write(pin, light)
     blynk.virtual_write(2, humidity)
     blynk.virtual_write(3, dac_voltage)
-    time_string = sys_time_string()
+    #time_string = sys_time_string()
     blynk.virtual_write(6, sys_time_string())
     #print(WRITE_EVENT_PRINT_MSG.format(pin, value))
     #update alarm status
